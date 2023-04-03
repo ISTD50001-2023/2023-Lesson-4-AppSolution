@@ -3,17 +3,24 @@ package com.example.norman_lee.recyclerview;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
 import android.os.Bundle;
 
+import androidx.activity.result.ActivityResult;
+import androidx.activity.result.ActivityResultCallback;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.Nullable;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.GridLayoutManager;
+import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.appcompat.widget.Toolbar;
 import android.util.Log;
 import android.view.View;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.Toast;
 
@@ -35,7 +42,6 @@ public class MainActivity extends AppCompatActivity {
 
     SharedPreferences mPreferences;
 
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -44,27 +50,70 @@ public class MainActivity extends AppCompatActivity {
         setSupportActionBar(toolbar);
 
         //TODO 11.1 Get references to the widgets
+        recyclerView = findViewById(R.id.charaRecyclerView);
+        imageViewAdded = findViewById(R.id.imageViewAdded);
 
         //TODO 12.7 Load the Json string from shared Preferences
         //TODO 12.8 Initialize your dataSource object with the Json string
+        mPreferences = getSharedPreferences(PREF_FILE, MODE_PRIVATE);
+        Gson gson = new Gson();
+        String json = mPreferences.getString(KEY_DATA, "");
+        if( json.isEmpty() ){
+            ArrayList<Integer> arrayListIds = new ArrayList<>();
+            arrayListIds.add( R.drawable.pikachu);
+            arrayListIds.add( R.drawable.psyduck);
+            arrayListIds.add( R.drawable.squirtle);
+            arrayListIds.add( R.drawable.spearow);
+            arrayListIds.add( R.drawable.bulbasaur);
+            dataSource = Utils.firstLoadImages(this, arrayListIds);
+        }else{
+            dataSource = gson.fromJson(json, DataSource.class);
+        }
 
         //TODO 11.2 Create your dataSource object by calling Utils.firstLoadImages
+        /*** Code Moved Upwards to TODO 12.8 */
+
         //TODO 11.3 --> Go to CharaAdapter
         //TODO 11.8 Complete the necessary code to initialize your RecyclerView
+        charaAdapter = new CharaAdapter( this, dataSource);
 
+        recyclerView.setAdapter( charaAdapter );
+        //recyclerView.setLayoutManager( new LinearLayoutManager(this));
+        recyclerView.setLayoutManager( new GridLayoutManager(this, 3));
         //TODO 12.9 [OPTIONAL] Add code to delete a RecyclerView item upon swiping. See notes for the code.
 
 
         //TODO 12.1 Set up an Explicit Intent to DataEntry Activity with startActivityForResult (no coding)
         //TODO 12.5a Set up an Activity Launcher to process the data returned
+        final ActivityResultLauncher<Intent> launcher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                new ActivityResultCallback<ActivityResult>() {
+                    @Override
+                    public void onActivityResult(ActivityResult result) {
+                        // YOU SAY WHAT YOU WANT TO DO WHEN YOU GET THE RESULT
+                        // get a Bundle object which contains the Extras
+                        Bundle b = result.getData().getExtras();
+                        String name = b.getString(DataEntry.KEY_NAME);
+                        String path = b.getString(DataEntry.KEY_PATH);
+                        dataSource.addData(name, path);
+                        charaAdapter.notifyDataSetChanged();
+
+                        // -- Displays the selected image at the big ? widget --
+                        Bitmap bitmap = Utils.loadImageFromStorage(path, name);
+                        imageViewAdded.setImageBitmap( bitmap );
+                    }
+                }
+
+        );
+
+
         FloatingActionButton fab = findViewById(R.id.fab);
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
 
                 Intent intent = new Intent(MainActivity.this, DataEntry.class);
-                startActivityForResult(intent, REQUEST_CODE_IMAGE);
-
+                launcher.launch(intent);
             }
         });
     }
@@ -73,30 +122,12 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause(){
         super.onPause();
+        SharedPreferences.Editor prefsEditor = mPreferences.edit();
+        Gson gson = new Gson();
+        String json = gson.toJson( dataSource );
+        prefsEditor.putString(KEY_DATA, json);
+        prefsEditor.apply();
     }
-
-
-    /*@Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.menu_main, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-
-        //noinspection SimplifiableIfStatement
-        if (id == R.id.action_settings) {
-            return true;
-        }
-
-        return super.onOptionsItemSelected(item);
-    }*/
 
     //TODO 12.5b Write onActivityResult to get the data passed back from DataEntry and add to DataSource object
     @Override
@@ -105,7 +136,5 @@ public class MainActivity extends AppCompatActivity {
 
         if( requestCode == REQUEST_CODE_IMAGE && resultCode == Activity.RESULT_OK){
         }
-
-
     }
 }
